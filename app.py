@@ -22,7 +22,7 @@ with st.sidebar:
     # Get API keys from Streamlit secrets
     try:
         if provider == "Claude (Anthropic)":
-            api_key = st.secrets["ANTHORPIC_API_KEY"]
+            api_key = st.secrets["ANTHROPIC_API_KEY"]
             model = st.selectbox(
                 "Select Model",
                 ["claude-sonnet-4-5-20250929", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229"]
