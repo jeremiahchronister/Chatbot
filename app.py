@@ -19,19 +19,27 @@ with st.sidebar:
         ["Claude (Anthropic)", "ChatGPT (OpenAI)"]
     )
     
-    # API Key input
-    if provider == "Claude (Anthropic)":
-        api_key = st.text_input("Enter Claude API Key", type="password", key="claude_key")
-        model = st.selectbox(
-            "Select Model",
-            ["claude-sonnet-4-5-20250929", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229"]
-        )
-    else:
-        api_key = st.text_input("Enter OpenAI API Key", type="password", key="openai_key")
-        model = st.selectbox(
-            "Select Model",
-            ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
-        )
+    # Get API keys from Streamlit secrets
+    try:
+        if provider == "Claude (Anthropic)":
+            api_key = st.secrets["ANTHORPIC_API_KEY"]
+            model = st.selectbox(
+                "Select Model",
+                ["claude-sonnet-4-5-20250929", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229"]
+            )
+        else:
+            api_key = st.secrets["OPENAI_API_KEY"]
+            model = st.selectbox(
+                "Select Model",
+                ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+            )
+        
+        st.success("✅ API key loaded successfully")
+    
+    except KeyError as e:
+        st.error(f"⚠️ API key not found in secrets: {e}")
+        st.info("Please check that your secret key name matches exactly in Streamlit settings")
+        st.stop()
     
     # Clear chat button
     if st.button("Clear Chat History"):
@@ -40,7 +48,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### About")
-    st.markdown("This chatbot supports both Claude and ChatGPT APIs. Enter your API key above to get started.")
+    st.markdown("This chatbot supports both Claude and ChatGPT APIs. API keys are securely stored in Streamlit secrets.")
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -53,11 +61,6 @@ for message in st.session_state.messages:
 
 # Chat input
 if prompt := st.chat_input("Type your message here..."):
-    # Check if API key is provided
-    if not api_key:
-        st.error("Please enter an API key in the sidebar.")
-        st.stop()
-    
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
     
@@ -120,4 +123,4 @@ if prompt := st.chat_input("Type your message here..."):
         
         except Exception as e:
             st.error(f"Error: {str(e)}")
-            st.info("Please check your API key and try again.")
+            st.info("Please check your API key configuration and try again.")
