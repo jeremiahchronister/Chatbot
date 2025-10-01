@@ -1,6 +1,9 @@
 import streamlit as st
 from anthropic import Anthropic
 from openai import OpenAI
+import base64
+from pathlib import Path
+import mimetypes
 
 # Page configuration
 st.set_page_config(page_title="Multi-AI Chatbot", page_icon="🤖", layout="wide")
@@ -38,6 +41,27 @@ AGENTS = {
         "description": "Creative writing, storytelling, and content creation"
     }
 }
+
+# Helper function to encode images
+def encode_image(image_file):
+    """Encode image to base64"""
+    return base64.b64encode(image_file.read()).decode('utf-8')
+
+# Helper function to read text documents
+def read_document(doc_file):
+    """Read text from document files"""
+    file_extension = Path(doc_file.name).suffix.lower()
+    
+    try:
+        if file_extension in ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml']:
+            return doc_file.read().decode('utf-8')
+        elif file_extension == '.pdf':
+            # For PDF, we'll return a message that it's attached
+            return f"[PDF Document: {doc_file.name}]"
+        else:
+            return f"[Document: {doc_file.name}]"
+    except Exception as e:
+        return f"[Could not read {doc_file.name}: {str(e)}]"
 
 # Title
 st.title("🤖 Multi-AI Chatbot with Personas")
@@ -89,45 +113,191 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Clear chat button
-    if st.button("Clear Chat History", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
+    # Advanced settings
+    with st.expander("⚙️ Advanced Settings"):
+        temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=0.7, step=0.1,
+                               help="Higher values make output more creative, lower values more focused")
+        max_tokens = st.slider("Max Tokens", min_value=512, max_value=8192, value=4096, step=512,
+                              help="Maximum length of the response")
     
     st.markdown("---")
-    st.markdown("### About")
-    st.markdown("This chatbot features specialized AI agents for different tasks. Select an agent above to get started!")
+    
+    # Chat management
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🗑️ Clear Chat", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.uploaded_files = []
+            st.rerun()
+    
+    with col2:
+        if st.button("💾 Export Chat", use_container_width=True):
+            if st.session_state.messages:
+                chat_export = "\n\n".join([
+                    f"{'User' if msg['role'] == 'user' else 'Assistant'}: {msg['content']}"
+                    for msg in st.session_state.messages
+                    if isinstance(msg.get('content'), str)
+                ])
+                st.download_button(
+                    label="Download",
+                    data=chat_export,
+                    file_name="chat_history.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+    
+    # Display message count
+    if st.session_state.get('messages'):
+        msg_count = len([m for m in st.session_state.messages if m['role'] == 'user'])
+        st.caption(f"💬 {msg_count} messages in conversation")
+    
+    st.markdown("---")
+    st.markdown("### 📎 File Support")
+    st.markdown("- **Images:** JPG, PNG, GIF, WebP\n- **Documents:** TXT, PDF, MD, Code files")
 
-# Initialize chat history with agent context
+# Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "current_agent" not in st.session_state:
     st.session_state.current_agent = agent_name
 
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = []
+
 # Reset chat if agent changed
 if st.session_state.current_agent != agent_name:
-    st.session_state.messages = []
-    st.session_state.current_agent = agent_name
-    st.rerun()
+    if st.session_state.messages:
+        st.warning("⚠️ Switching agents will clear your chat history")
+        if st.button("Continue and clear chat"):
+            st.session_state.messages = []
+            st.session_state.uploaded_files = []
+            st.session_state.current_agent = agent_name
+            st.rerun()
+        if st.button("Cancel"):
+            st.rerun()
+        st.stop()
+    else:
+        st.session_state.current_agent = agent_name
 
 # Display current agent at the top
-st.markdown(f"### {AGENTS[agent_name]['icon']} Currently chatting with: **{agent_name}**")
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.markdown(f"### {AGENTS[agent_name]['icon']} Currently chatting with: **{agent_name}**")
+with col2:
+    if st.button("ℹ️ Agent Info"):
+        st.info(AGENTS[agent_name]['system_prompt'])
+
 st.markdown("---")
 
 # Display chat messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        # Handle text content
+        if isinstance(message.get("content"), str):
+            st.markdown(message["content"])
+        # Handle multimodal content (images + text)
+        elif isinstance(message.get("content"), list):
+            for content_block in message["content"]:
+                if isinstance(content_block, dict):
+                    if content_block.get("type") == "text":
+                        st.markdown(content_block.get("text", ""))
+                    elif content_block.get("type") == "image":
+                        st.caption("🖼️ Image attached")
+        
+        # Display attached files
+        if "files" in message:
+            for file_info in message["files"]:
+                with st.expander(f"📎 {file_info['name']}"):
+                    if file_info['type'] == 'image':
+                        st.image(file_info['data'])
+                    else:
+                        st.text(file_info['data'][:500] + "..." if len(file_info['data']) > 500 else file_info['data'])
+
+# File upload section
+with st.container():
+    uploaded_files = st.file_uploader(
+        "📎 Attach files (optional)",
+        accept_multiple_files=True,
+        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'pdf', 'md', 'py', 'js', 'html', 'css', 'json'],
+        help="Upload images or documents to discuss with the AI"
+    )
 
 # Chat input
 if prompt := st.chat_input("Type your message here..."):
+    # Prepare message content
+    message_content = []
+    attached_files = []
+    
+    # Process uploaded files
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            file_extension = Path(uploaded_file.name).suffix.lower()
+            mime_type = mimetypes.guess_type(uploaded_file.name)[0]
+            
+            # Handle images
+            if mime_type and mime_type.startswith('image/'):
+                image_data = encode_image(uploaded_file)
+                
+                if provider == "Claude (Anthropic)":
+                    message_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime_type,
+                            "data": image_data
+                        }
+                    })
+                else:  # OpenAI
+                    message_content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{image_data}"
+                        }
+                    })
+                
+                attached_files.append({
+                    "name": uploaded_file.name,
+                    "type": "image",
+                    "data": uploaded_file.getvalue()
+                })
+            
+            # Handle documents
+            else:
+                doc_content = read_document(uploaded_file)
+                prompt = f"{prompt}\n\n[Attached document: {uploaded_file.name}]\n{doc_content}"
+                
+                attached_files.append({
+                    "name": uploaded_file.name,
+                    "type": "document",
+                    "data": doc_content
+                })
+    
+    # Add text to message content
+    if message_content:
+        message_content.append({"type": "text", "text": prompt})
+    else:
+        message_content = prompt
+    
     # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    user_message = {
+        "role": "user",
+        "content": message_content
+    }
+    if attached_files:
+        user_message["files"] = attached_files
+    
+    st.session_state.messages.append(user_message)
     
     # Display user message
     with st.chat_message("user"):
         st.markdown(prompt)
+        if attached_files:
+            for file_info in attached_files:
+                if file_info['type'] == 'image':
+                    st.image(file_info['data'], caption=file_info['name'], width=300)
+                else:
+                    st.caption(f"📄 {file_info['name']}")
     
     # Generate AI response
     with st.chat_message("assistant"):
@@ -139,15 +309,18 @@ if prompt := st.chat_input("Type your message here..."):
                 # Claude API call
                 client = Anthropic(api_key=api_key)
                 
-                # Convert messages to Claude format with system prompt
-                claude_messages = [
-                    {"role": msg["role"], "content": msg["content"]} 
-                    for msg in st.session_state.messages
-                ]
+                # Convert messages to Claude format
+                claude_messages = []
+                for msg in st.session_state.messages:
+                    claude_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
                 
                 with client.messages.stream(
                     model=model,
-                    max_tokens=4096,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
                     system=AGENTS[agent_name]["system_prompt"],
                     messages=claude_messages
                 ) as stream:
@@ -161,17 +334,22 @@ if prompt := st.chat_input("Type your message here..."):
                 # OpenAI API call
                 client = OpenAI(api_key=api_key)
                 
-                # Convert messages to OpenAI format with system message
+                # Convert messages to OpenAI format
                 openai_messages = [
                     {"role": "system", "content": AGENTS[agent_name]["system_prompt"]}
-                ] + [
-                    {"role": msg["role"], "content": msg["content"]}
-                    for msg in st.session_state.messages
                 ]
+                
+                for msg in st.session_state.messages:
+                    openai_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
                 
                 stream = client.chat.completions.create(
                     model=model,
                     messages=openai_messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
                     stream=True
                 )
                 
@@ -188,3 +366,13 @@ if prompt := st.chat_input("Type your message here..."):
         except Exception as e:
             st.error(f"Error: {str(e)}")
             st.info("Please check your API key configuration and try again.")
+
+# Footer with helpful tips
+with st.expander("💡 Tips for better conversations"):
+    st.markdown("""
+    - **Be specific:** The more details you provide, the better the response
+    - **Upload files:** Attach images or documents for analysis
+    - **Use agents:** Switch between specialized agents for different tasks
+    - **Adjust settings:** Try different temperature values for varied responses
+    - **Export chat:** Save your conversations for later reference
+    """)
