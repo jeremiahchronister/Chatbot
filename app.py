@@ -8,37 +8,67 @@ import mimetypes
 # Page configuration
 st.set_page_config(page_title="Multi-AI Chatbot", page_icon="🤖", layout="wide")
 
-# Define agent personas
+# Define agent personas with starter prompts
 AGENTS = {
     "General Assistant": {
         "icon": "🤖",
         "system_prompt": "You are a helpful, friendly, and knowledgeable AI assistant.",
-        "description": "General purpose assistant for any task"
+        "description": "General purpose assistant for any task",
+        "starters": [
+            "Help me brainstorm ideas for a project",
+            "Explain a complex topic in simple terms",
+            "Summarize the key points from this document"
+        ]
     },
     "Resume Helper": {
         "icon": "📝",
         "system_prompt": "You are an expert career coach and resume writer with 15+ years of experience. You help people create compelling resumes, optimize them for ATS systems, craft impactful bullet points using the STAR method, and provide tailored advice for different industries and career levels.",
-        "description": "Expert help with resumes, cover letters, and career advice"
+        "description": "Expert help with resumes, cover letters, and career advice",
+        "starters": [
+            "Review my resume and suggest improvements",
+            "Help me write compelling bullet points for my experience",
+            "Create a cover letter for this job description"
+        ]
     },
     "Finance Advisor": {
         "icon": "💰",
         "system_prompt": "You are a knowledgeable financial advisor specializing in personal finance, investing, budgeting, and financial planning. You provide clear, actionable advice on saving, investing, retirement planning, tax strategies, and wealth management. You always remind users to consult with licensed professionals for personalized advice.",
-        "description": "Personal finance, investing, and budgeting guidance"
+        "description": "Personal finance, investing, and budgeting guidance",
+        "starters": [
+            "Help me create a monthly budget",
+            "Explain different investment strategies for beginners",
+            "What should I consider for retirement planning?"
+        ]
     },
     "Healthcare Assistant": {
         "icon": "🏥",
         "system_prompt": "You are a healthcare information assistant with expertise in general health, wellness, nutrition, and medical information. You provide evidence-based health information, explain medical concepts clearly, and offer wellness tips. You always emphasize that your information is educational and users should consult healthcare professionals for medical advice, diagnosis, or treatment.",
-        "description": "Health information, wellness tips, and medical education"
+        "description": "Health information, wellness tips, and medical education",
+        "starters": [
+            "What are some evidence-based ways to improve sleep?",
+            "Explain this medical term or condition",
+            "Suggest a balanced meal plan for better nutrition"
+        ]
     },
     "Coding Mentor": {
         "icon": "💻",
         "system_prompt": "You are an experienced software engineer and coding mentor. You help with programming questions, debug code, explain concepts clearly, provide best practices, and guide learners through technical challenges. You write clean, well-documented code and explain your reasoning.",
-        "description": "Programming help, code review, and technical guidance"
+        "description": "Programming help, code review, and technical guidance",
+        "starters": [
+            "Review my code and suggest improvements",
+            "Help me debug this error",
+            "Explain this programming concept with examples"
+        ]
     },
     "Creative Writer": {
         "icon": "✍️",
         "system_prompt": "You are a creative writing coach and accomplished author. You help with storytelling, creative writing, content creation, editing, and developing engaging narratives. You provide constructive feedback, suggest improvements, and inspire creativity.",
-        "description": "Creative writing, storytelling, and content creation"
+        "description": "Creative writing, storytelling, and content creation",
+        "starters": [
+            "Help me develop a compelling story idea",
+            "Edit and improve this piece of writing",
+            "Give me creative writing prompts to practice"
+        ]
     }
 }
 
@@ -214,35 +244,46 @@ for message in st.session_state.messages:
                     else:
                         st.text(file_info['data'][:500] + "..." if len(file_info['data']) > 500 else file_info['data'])
 
-# Prominent input section with better visibility
+# Show starter prompts only if chat is empty
+if not st.session_state.messages:
+    st.markdown("### 🚀 Get Started")
+    st.markdown("Choose a starter prompt or type your own message below:")
+    
+    cols = st.columns(3)
+    for idx, starter in enumerate(AGENTS[agent_name]["starters"]):
+        with cols[idx]:
+            if st.button(starter, key=f"starter_{idx}", use_container_width=True):
+                # Set the starter as the prompt to be processed
+                st.session_state.starter_prompt = starter
+                st.rerun()
+
 st.markdown("---")
-st.markdown("### 💬 Your Message")
 
-# Create columns for better layout
-col1, col2 = st.columns([4, 1])
-
+# File upload integrated with message area
+col1, col2 = st.columns([5, 1])
 with col1:
-    # File upload section - more compact
+    st.markdown("### 💬 Your Message")
+with col2:
     uploaded_files = st.file_uploader(
-        "📎 Attach files (optional)",
+        "📎",
         accept_multiple_files=True,
         type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'pdf', 'md', 'py', 'js', 'html', 'css', 'json'],
-        help="Upload images or documents to discuss with the AI",
-        label_visibility="collapsed"
+        help="Attach files",
+        label_visibility="visible"
     )
-    if uploaded_files:
-        st.caption(f"✅ {len(uploaded_files)} file(s) attached")
 
-with col2:
-    st.markdown("")  # Spacer
-    if uploaded_files and st.button("🗑️ Clear files", use_container_width=True):
-        uploaded_files = None
-        st.rerun()
+if uploaded_files:
+    st.caption(f"📎 {len(uploaded_files)} file(s) attached - {', '.join([f.name for f in uploaded_files])}")
 
-st.info("💡 **Tip:** Type your message below and press Enter to send. Attach files using the button above.", icon="ℹ️")
+# Chat input
+prompt = st.chat_input("Type your message here and press Enter...", key="chat_input")
 
-# Chat input - now more prominent
-if prompt := st.chat_input("Type your message here... (Press Enter to send)", key="chat_input"):
+# Check if we have a starter prompt to process
+if "starter_prompt" in st.session_state:
+    prompt = st.session_state.starter_prompt
+    del st.session_state.starter_prompt
+
+if prompt:
     # Prepare message content
     message_content = []
     attached_files = []
@@ -386,11 +427,12 @@ if prompt := st.chat_input("Type your message here... (Press Enter to send)", ke
             st.info("Please check your API key configuration and try again.")
 
 # Footer with helpful tips
-with st.expander("💡 Tips for better conversations"):
-    st.markdown("""
-    - **Be specific:** The more details you provide, the better the response
-    - **Upload files:** Attach images or documents for analysis
-    - **Use agents:** Switch between specialized agents for different tasks
-    - **Adjust settings:** Try different temperature values for varied responses
-    - **Export chat:** Save your conversations for later reference
-    """)
+if st.session_state.messages:
+    with st.expander("💡 Tips for better conversations"):
+        st.markdown("""
+        - **Be specific:** The more details you provide, the better the response
+        - **Upload files:** Attach images or documents for analysis
+        - **Use agents:** Switch between specialized agents for different tasks
+        - **Adjust settings:** Try different temperature values for varied responses
+        - **Export chat:** Save your conversations for later reference
+        """)
