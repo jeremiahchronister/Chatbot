@@ -214,17 +214,35 @@ for message in st.session_state.messages:
                     else:
                         st.text(file_info['data'][:500] + "..." if len(file_info['data']) > 500 else file_info['data'])
 
-# File upload section
-with st.container():
+# Prominent input section with better visibility
+st.markdown("---")
+st.markdown("### 💬 Your Message")
+
+# Create columns for better layout
+col1, col2 = st.columns([4, 1])
+
+with col1:
+    # File upload section - more compact
     uploaded_files = st.file_uploader(
         "📎 Attach files (optional)",
         accept_multiple_files=True,
         type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'pdf', 'md', 'py', 'js', 'html', 'css', 'json'],
-        help="Upload images or documents to discuss with the AI"
+        help="Upload images or documents to discuss with the AI",
+        label_visibility="collapsed"
     )
+    if uploaded_files:
+        st.caption(f"✅ {len(uploaded_files)} file(s) attached")
 
-# Chat input
-if prompt := st.chat_input("Type your message here..."):
+with col2:
+    st.markdown("")  # Spacer
+    if uploaded_files and st.button("🗑️ Clear files", use_container_width=True):
+        uploaded_files = None
+        st.rerun()
+
+st.info("💡 **Tip:** Type your message below and press Enter to send. Attach files using the button above.", icon="ℹ️")
+
+# Chat input - now more prominent
+if prompt := st.chat_input("Type your message here... (Press Enter to send)", key="chat_input"):
     # Prepare message content
     message_content = []
     attached_files = []
